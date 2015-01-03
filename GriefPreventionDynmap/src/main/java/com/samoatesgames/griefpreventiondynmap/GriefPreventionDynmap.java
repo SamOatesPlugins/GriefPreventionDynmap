@@ -51,6 +51,11 @@ public final class GriefPreventionDynmap extends SamOatesPlugin {
     private Map<String, AreaMarker> m_claims = new HashMap<String, AreaMarker>();
 
     /**
+     * The ID of the scheduler update task
+     */
+    private int m_updateTaskID = -1;
+    
+    /**
      * Class constructor
      */
     public GriefPreventionDynmap() {
@@ -69,7 +74,7 @@ public final class GriefPreventionDynmap extends SamOatesPlugin {
 
         // Dynmap isn't installed, disble this plugin
         if (dynmapPlugin == null) {
-            this.LogError("The dynmap plugin was not found on this server...");
+            this.logError("The dynmap plugin was not found on this server...");
             pluginManager.disablePlugin(this);
             return;
         }
@@ -81,7 +86,7 @@ public final class GriefPreventionDynmap extends SamOatesPlugin {
 
         // GriefPrevention isn't installed, disble this plugin
         if (griefPreventionPlugin == null) {
-            this.LogError("The grief prevention plugin was not found on this server...");
+            this.logError("The grief prevention plugin was not found on this server...");
             pluginManager.disablePlugin(this);
             return;
         }
@@ -90,19 +95,19 @@ public final class GriefPreventionDynmap extends SamOatesPlugin {
 
         // If either dynmap or grief prevention are disabled, disable this plugin
         if (!(dynmapPlugin.isEnabled() && griefPreventionPlugin.isEnabled())) {
-            this.LogError("Either dynmap or grief prevention is disabled...");
+            this.logError("Either dynmap or grief prevention is disabled...");
             pluginManager.disablePlugin(this);
             return;
         }
-
+        
         if (!setupMarkerSet()) {
-            this.LogError("Failed to setup a marker set...");
+            this.logError("Failed to setup a marker set...");
             pluginManager.disablePlugin(this);
             return;
         }
 
         BukkitScheduler scheduler = getServer().getScheduler();
-        scheduler.scheduleSyncRepeatingTask(
+        m_updateTaskID = scheduler.scheduleSyncRepeatingTask(
                 this,
                 new Runnable() {
                     @Override
@@ -111,18 +116,49 @@ public final class GriefPreventionDynmap extends SamOatesPlugin {
                     }
                 },
                 20L,
-                500L // Update every 30 seconds  
+                20L * this.getSetting(Setting.DynmapUpdateRate, 30)
         );
 
-        this.LogInfo("Succesfully enabled.");
+        this.logInfo("Succesfully enabled.");
     }
 
+    /**
+     * Register all configuration settings
+     */
+    public void setupConfigurationSettings() {
+        
+        this.registerSetting(Setting.ShowChildClaims, true);    // Should child claims be shown on the dynmap
+        this.registerSetting(Setting.DynmapUpdateRate, 30);     // How many seconds should we wait before refreshing the dynmap layer
+        
+        this.registerSetting(Setting.ClaimsLayerName, "Claims");    // The name of the claims layer shown on dynmap
+        this.registerSetting(Setting.ClaimsLayerPriority, 10);      // The render priority of the claims layer shown on dynmap
+        this.registerSetting(Setting.ClaimsLayerHiddenByDefault, false);    // Should the claims layer be hidden by default on the dynmap
+        
+        this.registerSetting(Setting.MarkerLineColor, "FF0000");    // The color of the border of the marker (in hex)
+        this.registerSetting(Setting.MarkerLineWeight, 2);          // The thickness of the border of the marker
+        this.registerSetting(Setting.MarkerLineOpacity, 0.8);       // The alpha transparacy level of the border for the marker
+        this.registerSetting(Setting.MarkerFillColor, "FF0000");    // THe fill color of the marker (in hex)
+        this.registerSetting(Setting.MarkerFillOpacity, 0.35);      // The alpha transparacy level of the fill for the marker
+    }
+    
     /**
      * Called when the plugin is disabled
      */
     @Override
     public void onDisable() {
+        
+        if (m_updateTaskID != -1) {
+            BukkitScheduler scheduler = getServer().getScheduler();
+            scheduler.cancelTask(m_updateTaskID);
+            m_updateTaskID = -1;
+        }
+        
+        for (AreaMarker marker : m_claims.values()) {
+            marker.deleteMarker();
+        }
         m_claims.clear();
+
+        m_griefPreventionMarkerSet.deleteMarkerSet();
     }
 
     /**
@@ -132,19 +168,20 @@ public final class GriefPreventionDynmap extends SamOatesPlugin {
 
         m_griefPreventionMarkerSet = m_dynmapMarkerAPI.getMarkerSet("griefprevention.markerset");
 
+        final String layerName = this.getSetting(Setting.ClaimsLayerName, "Claims");
         if (m_griefPreventionMarkerSet == null) {
-            m_griefPreventionMarkerSet = m_dynmapMarkerAPI.createMarkerSet("griefprevention.markerset", "Claims", null, false);
+            m_griefPreventionMarkerSet = m_dynmapMarkerAPI.createMarkerSet("griefprevention.markerset", layerName, null, false);
         } else {
-            m_griefPreventionMarkerSet.setMarkerSetLabel("GriefPrevention");
+            m_griefPreventionMarkerSet.setMarkerSetLabel(layerName);
         }
 
         if (m_griefPreventionMarkerSet == null) {
-            this.LogError("Failed to create a marker set with the name 'griefprevention.markerset'.");
+            this.logError("Failed to create a marker set with the name 'griefprevention.markerset'.");
             return false;
         }
 
-        m_griefPreventionMarkerSet.setLayerPriority(10);
-        m_griefPreventionMarkerSet.setHideByDefault(false);
+        m_griefPreventionMarkerSet.setLayerPriority(this.getSetting(Setting.ClaimsLayerPriority, 10));
+        m_griefPreventionMarkerSet.setHideByDefault(this.getSetting(Setting.ClaimsLayerHiddenByDefault, false));
 
         return true;
     }
@@ -164,27 +201,38 @@ public final class GriefPreventionDynmap extends SamOatesPlugin {
             if (o instanceof ArrayList) {
                 claims = (ArrayList<Claim>) o;
             }
-        } catch (Exception e) {
+        } catch (NoSuchFieldException ex) {
+            this.logException("Error reflecting claims member from gried prevention, the field 'claims' does not exist!", ex);
+            return;
+        } catch (SecurityException ex) {
+            this.logException("Error reflecting claims member from gried prevention, you don't have permission to do this.", ex);
+            return;
+        } catch (IllegalArgumentException ex) {
+            this.logException("Error reflecting claims member from gried prevention, the specified arguments are invalid.", ex);
+            return;
+        } catch (IllegalAccessException ex) {
+            this.logException("Error reflecting claims member from gried prevention, you don't have permission to access the feild 'claims'.", ex);
             return;
         }
 
-        /* If claims, process them */
+        // We have found claims! Create markers for them all
         if (claims != null) {
             for (Claim claim : claims) {
                 createClaimMarker(claim, newClaims);
-                if ((claim.children != null) && (claim.children.size() > 0)) {
+                if (claim.children != null && this.getSetting(Setting.ShowChildClaims, true)) {
                     for (Claim children : claim.children) {
                         createClaimMarker(children, newClaims);
                     }
                 }
             }
         }
-        /* Now, review old map - anything left is gone */
+        
+        // Remove any markers for claims which no longer exist
         for (AreaMarker oldm : m_claims.values()) {
             oldm.deleteMarker();
         }
 
-        /* And replace with new map */
+        // And replace with new map
         m_claims.clear();
         m_claims = newClaims;
     }
@@ -230,7 +278,7 @@ public final class GriefPreventionDynmap extends SamOatesPlugin {
         }
 
         // Set line and fill properties
-        addStyle(marker);
+        setMarkerStyle(marker);
 
         // Build popup
         String desc = formatInfoWindow(claim);
@@ -244,11 +292,27 @@ public final class GriefPreventionDynmap extends SamOatesPlugin {
      * Setup the markers styling
      * @param marker 
      */
-    private void addStyle(AreaMarker marker) {
-        int sc = 0xFF0000;
-        int fc = 0xFF0000;
-        marker.setLineStyle(3, 0.8, sc);
-        marker.setFillStyle(0.35, fc);
+    private void setMarkerStyle(AreaMarker marker) {
+        
+        // Get the style settings
+        int lineColor = 0xFF0000;
+        int fillColor = 0xFF0000;
+        
+        try {
+            lineColor = Integer.parseInt(this.getSetting(Setting.MarkerLineColor, "FF0000"), 16);
+            fillColor = Integer.parseInt(this.getSetting(Setting.MarkerFillColor, "FF0000"), 16);
+        }
+        catch (Exception ex) {
+            this.logException("Invalid syle color specified. Defaulting to red.", ex);
+        }
+        
+        int lineWeight = this.getSetting(Setting.MarkerLineWeight, 2);
+        double lineOpacity = this.getSetting(Setting.MarkerLineOpacity, 0.8);
+        double fillOpacity = this.getSetting(Setting.MarkerFillOpacity, 0.35);
+        
+        // Set the style of the marker
+        marker.setLineStyle(lineWeight, lineOpacity, lineColor);
+        marker.setFillStyle(fillOpacity, fillColor);
     }
 
     /**
@@ -257,10 +321,14 @@ public final class GriefPreventionDynmap extends SamOatesPlugin {
      * @return Html representation of the information window
      */
     private String formatInfoWindow(Claim claim) {
+        final String owner = claim.getOwnerName();
         return "<div class=\"regioninfo\">" + 
-                "<div class=\"infowindow\"><span style=\"font-weight:bold;\">" +
-                claim.getOwnerName() + 
-                "'s claim</span><br/></div>" + 
+                    "<center>" + 
+                        "<div class=\"infowindow\">"+ 
+                            "<span style=\"font-weight:bold;\">" + owner + "'s claim</span><br/>" + 
+                            "<img src='https://minotar.net/helm/" + owner + "/20' />" +
+                        "</div>" + 
+                    "</center>" +
                 "</div>";
     }
 }
