@@ -139,6 +139,12 @@ public final class GriefPreventionDynmap extends SamOatesPlugin {
         this.registerSetting(Setting.MarkerLineOpacity, 0.8);       // The alpha transparacy level of the border for the marker
         this.registerSetting(Setting.MarkerFillColor, "FF0000");    // THe fill color of the marker (in hex)
         this.registerSetting(Setting.MarkerFillOpacity, 0.35);      // The alpha transparacy level of the fill for the marker
+        
+        this.registerSetting(Setting.AdminMarkerLineColor, "FF0000");    // The color of the border of the admin marker (in hex)
+        this.registerSetting(Setting.AdminMarkerLineWeight, 2);          // The thickness of the border of the admin marker
+        this.registerSetting(Setting.AdminMarkerLineOpacity, 0.8);       // The alpha transparacy level of the border for the admin marker
+        this.registerSetting(Setting.AdminMarkerFillColor, "FF0000");    // THe fill color of the admin marker (in hex)
+        this.registerSetting(Setting.AdminMarkerFillOpacity, 0.35);      // The alpha transparacy level of the fill for the admin marker
     }
     
     /**
@@ -252,7 +258,7 @@ public final class GriefPreventionDynmap extends SamOatesPlugin {
 
         String worldname = lowerBounds.getWorld().getName();
         String owner = claim.getOwnerName();
-
+        
         // Make outline
         double[] x = new double[4];
         double[] z = new double[4];
@@ -278,7 +284,7 @@ public final class GriefPreventionDynmap extends SamOatesPlugin {
         }
 
         // Set line and fill properties
-        setMarkerStyle(marker);
+        setMarkerStyle(marker, claim.isAdminClaim());
 
         // Build popup
         String desc = formatInfoWindow(claim);
@@ -292,23 +298,23 @@ public final class GriefPreventionDynmap extends SamOatesPlugin {
      * Setup the markers styling
      * @param marker 
      */
-    private void setMarkerStyle(AreaMarker marker) {
+    private void setMarkerStyle(AreaMarker marker, boolean isAdmin) {
         
         // Get the style settings
         int lineColor = 0xFF0000;
         int fillColor = 0xFF0000;
         
         try {
-            lineColor = Integer.parseInt(this.getSetting(Setting.MarkerLineColor, "FF0000"), 16);
-            fillColor = Integer.parseInt(this.getSetting(Setting.MarkerFillColor, "FF0000"), 16);
+            lineColor = Integer.parseInt(this.getSetting(isAdmin ? Setting.AdminMarkerLineColor : Setting.MarkerLineColor, "FF0000"), 16);
+            fillColor = Integer.parseInt(this.getSetting(isAdmin ? Setting.AdminMarkerFillColor : Setting.MarkerFillColor, "FF0000"), 16);
         }
         catch (Exception ex) {
             this.logException("Invalid syle color specified. Defaulting to red.", ex);
         }
         
-        int lineWeight = this.getSetting(Setting.MarkerLineWeight, 2);
-        double lineOpacity = this.getSetting(Setting.MarkerLineOpacity, 0.8);
-        double fillOpacity = this.getSetting(Setting.MarkerFillOpacity, 0.35);
+        int lineWeight = this.getSetting(isAdmin ? Setting.AdminMarkerLineWeight : Setting.MarkerLineWeight, 2);
+        double lineOpacity = this.getSetting(isAdmin ? Setting.AdminMarkerLineOpacity : Setting.MarkerLineOpacity, 0.8);
+        double fillOpacity = this.getSetting(isAdmin ? Setting.AdminMarkerFillOpacity : Setting.MarkerFillOpacity, 0.35);
         
         // Set the style of the marker
         marker.setLineStyle(lineWeight, lineOpacity, lineColor);
@@ -321,12 +327,13 @@ public final class GriefPreventionDynmap extends SamOatesPlugin {
      * @return Html representation of the information window
      */
     private String formatInfoWindow(Claim claim) {
+        final boolean isAdmin = claim.isAdminClaim();
         final String owner = claim.getOwnerName();
         return "<div class=\"regioninfo\">" + 
                     "<center>" + 
                         "<div class=\"infowindow\">"+ 
                             "<span style=\"font-weight:bold;\">" + owner + "'s claim</span><br/>" + 
-                            "<img src='https://minotar.net/helm/" + owner + "/20' />" +
+                            (isAdmin ? "" : "<img src='https://minotar.net/helm/" + owner + "/20' />") +
                         "</div>" + 
                     "</center>" +
                 "</div>";

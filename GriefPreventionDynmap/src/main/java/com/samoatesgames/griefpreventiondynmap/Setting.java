@@ -22,6 +22,13 @@ public class Setting {
     public static final String MarkerFillColor = "marker.style.fill.color";
     public static final String MarkerFillOpacity = "marker.style.fill.opacity";
     
+    // Admin Marker Style Settings
+    public static final String AdminMarkerLineColor = "marker.admin.style.border.color";
+    public static final String AdminMarkerLineWeight = "marker.admin.style.border.weight";
+    public static final String AdminMarkerLineOpacity = "marker.admin.style.border.opacity";
+    public static final String AdminMarkerFillColor = "marker.admin.style.fill.color";
+    public static final String AdminMarkerFillOpacity = "marker.admin.style.fill.opacity";
+    
     // Layer Settings
     public static final String ClaimsLayerName = "layer.name";
     public static final String ClaimsLayerPriority = "layer.priority";
