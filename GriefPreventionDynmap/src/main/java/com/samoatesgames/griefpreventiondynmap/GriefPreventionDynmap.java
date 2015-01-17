@@ -333,7 +333,8 @@ public final class GriefPreventionDynmap extends SamOatesPlugin {
                     "<center>" + 
                         "<div class=\"infowindow\">"+ 
                             "<span style=\"font-weight:bold;\">" + owner + "'s claim</span><br/>" + 
-                            (isAdmin ? "" : "<img src='https://minotar.net/helm/" + owner + "/20' />") +
+                            (isAdmin ? "" : "<img src='https://minotar.net/helm/" + owner + "/20' /><br/>") +
+                            claim.getWidth() + " x " + claim.getHeight() +
                         "</div>" + 
                     "</center>" +
                 "</div>";
