@@ -56,6 +56,11 @@ public final class GriefPreventionDynmap extends SamOatesPlugin {
     private int m_updateTaskID = -1;
     
     /**
+     * The reflected field containing the claims
+     */
+    private Field m_claimsField = null;
+    
+    /**
      * Class constructor
      */
     public GriefPreventionDynmap() {
@@ -106,6 +111,8 @@ public final class GriefPreventionDynmap extends SamOatesPlugin {
             return;
         }
 
+        getClaimsField();
+        
         BukkitScheduler scheduler = getServer().getScheduler();
         m_updateTaskID = scheduler.scheduleSyncRepeatingTask(
                 this,
@@ -192,6 +199,25 @@ public final class GriefPreventionDynmap extends SamOatesPlugin {
         return true;
     }
 
+    private boolean getClaimsField() {
+        
+        try {
+            m_claimsField = DataStore.class.getDeclaredField("claims");
+            m_claimsField.setAccessible(true);
+        } catch (NoSuchFieldException ex) {
+            this.logException("Error reflecting claims member from gried prevention, the field 'claims' does not exist!", ex);
+            return false;
+        } catch (SecurityException ex) {
+            this.logException("Error reflecting claims member from gried prevention, you don't have permission to do this.", ex);
+            return false;
+        } catch (IllegalArgumentException ex) {
+            this.logException("Error reflecting claims member from gried prevention, the specified arguments are invalid.", ex);
+            return false;
+        } 
+        
+        return true;
+    }
+    
     /**
      * Update all claims
      */
@@ -201,15 +227,10 @@ public final class GriefPreventionDynmap extends SamOatesPlugin {
 
         ArrayList<Claim> claims = null;
         try {
-            Field fld = DataStore.class.getDeclaredField("claims");
-            fld.setAccessible(true);
-            Object o = fld.get(m_griefPreventionPlugin.dataStore);
-            if (o instanceof ArrayList) {
-                claims = (ArrayList<Claim>) o;
+            Object rawClaims = m_claimsField.get(m_griefPreventionPlugin.dataStore);
+            if (rawClaims instanceof ArrayList) {
+                claims = (ArrayList<Claim>) rawClaims;
             }
-        } catch (NoSuchFieldException ex) {
-            this.logException("Error reflecting claims member from gried prevention, the field 'claims' does not exist!", ex);
-            return;
         } catch (SecurityException ex) {
             this.logException("Error reflecting claims member from gried prevention, you don't have permission to do this.", ex);
             return;
